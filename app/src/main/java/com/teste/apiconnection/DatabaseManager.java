@@ -26,9 +26,9 @@ import java.util.Map;
  * Esta classe gerencia operações de banco de dados via API.
  */
 public class DatabaseManager {
-    private static String apiUrl = "http://192.168.0.165:5000/mysql/query"; // URL padrão
-    private List<Pair<String, String>> results; // Armazenar pares chave-valor
-    private TextView txtResult; // Referência ao TextView para exibir resultados
+    private static  String API_URL = "http://192.168.0.165:5000/mysql/query"; // URL padrão
+    private final List<String> results; // Armazenar valores
+    private final TextView txtResult; // Referência ao TextView para exibir resultados
 
     public DatabaseManager(TextView txtResult) {
         this.txtResult = txtResult;
@@ -36,7 +36,7 @@ public class DatabaseManager {
     }
 
     public static void setApiUrl(String url) {
-        apiUrl = url;
+        DatabaseManager.API_URL = url;
     }
 
     public void execute(String query) {
@@ -44,23 +44,16 @@ public class DatabaseManager {
         new QueryExecutorTask(this).execute(jsonPayload);
     }
 
-    public List<Pair<String, String>> fetchAll() {
+    public List<String> fetchAllValues() {
         return results;
     }
 
-    public String getValueAt(int index) {
-        if (index >= 0 && index < results.size()) {
-            return results.get(index).second; // Retorna o valor do par chave-valor
-        }
-        return null; // Retorna null se o índice estiver fora do intervalo
-    }
-
-    private void setResults(List<Pair<String, String>> results) {
-        this.results = results;
+    private void addResult(String value) {
+        results.add(value);
     }
 
     private static class QueryExecutorTask extends AsyncTask<String, Void, Boolean> {
-        private DatabaseManager dbManager;
+        private final DatabaseManager dbManager;
 
         QueryExecutorTask(DatabaseManager dbManager) {
             this.dbManager = dbManager;
@@ -70,8 +63,7 @@ public class DatabaseManager {
         protected Boolean doInBackground(String... params) {
             try {
                 JsonObject result = queryExecute(params[0]);
-                List<Pair<String, String>> data = processQueryResult(result);
-                dbManager.setResults(data);
+                processQueryResult(result, dbManager);
                 return true;
             } catch (Exception e) {
                 Log.e("API_ERROR", "Erro ao executar a consulta: " + e.getMessage());
@@ -83,8 +75,11 @@ public class DatabaseManager {
         protected void onPostExecute(Boolean success) {
             if (success) {
                 Log.d("QUERY_RESULT", "Consulta realizada com sucesso.");
-                // Aqui você pode chamar um método para exibir o resultado
-                dbManager.displayResults(1); // Exibe o segundo valor (índice 1)
+                // Chama o método da MainActivity para exibir os resultados
+                if (dbManager.txtResult.getContext() instanceof MainActivity) {
+                    MainActivity activity = (MainActivity) dbManager.txtResult.getContext();
+                    activity.displayResults();
+                }
             } else {
                 Log.e("QUERY_RESULT", "Erro ao executar a consulta.");
             }
@@ -94,7 +89,7 @@ public class DatabaseManager {
             HttpURLConnection urlConnection = null;
 
             try {
-                URL url = new URL(apiUrl);
+                URL url = new URL(API_URL);
                 urlConnection = (HttpURLConnection) url.openConnection();
                 urlConnection.setRequestMethod("POST");
                 urlConnection.setRequestProperty("Content-Type", "application/json");
@@ -123,10 +118,9 @@ public class DatabaseManager {
             }
         }
 
-        private static List<Pair<String, String>> processQueryResult(JsonObject result) {
-            List<Pair<String, String>> data = new ArrayList<>();
-
+        private static void processQueryResult(JsonObject result, DatabaseManager dbManager) {
             if (result != null) {
+                Log.d("API_RESULT", result.toString()); // Log da resposta da API
                 if (result.has("status") && "success".equals(result.get("status").getAsString())) {
                     if (result.has("data")) {
                         JsonElement dataElement = result.get("data");
@@ -136,39 +130,26 @@ public class DatabaseManager {
                                 if (element.isJsonObject()) {
                                     JsonObject obj = element.getAsJsonObject();
                                     for (Map.Entry<String, JsonElement> entry : obj.entrySet()) {
-                                        String key = entry.getKey();
                                         String value = entry.getValue().getAsString();
-                                        data.add(new Pair<>(key, value));
+                                        dbManager.addResult(value);
                                     }
                                 }
                             }
                         } else if (dataElement.isJsonObject()) {
                             JsonObject obj = dataElement.getAsJsonObject();
                             for (Map.Entry<String, JsonElement> entry : obj.entrySet()) {
-                                String key = entry.getKey();
                                 String value = entry.getValue().getAsString();
-                                data.add(new Pair<>(key, value));
+                                dbManager.addResult(value);
                             }
                         }
                     }
                 }
             }
-            return data;
-        }
-
-        private void displayResults(int index) {
-            String output;
-            if (index >= 0 && index < results.size()) {
-                output = results.get(index).second; // Obtém o valor do índice especificado
-            } else {
-                output = "Valor não encontrado.";
-            }
-            txtResult.setText(output); // Exibe o valor no TextView
         }
     }
 
     public interface QueryCallback {
-        void onQueryResult(List<Pair<String, String>> result); // Retorna uma lista de pares chave-valor
+        void onQueryResult(List<String> result); // Retorna uma lista de valores
         void onInsertResult(boolean success);
     }
 }
