@@ -9,6 +9,7 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 
 import java.io.BufferedReader;
+import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
@@ -22,15 +23,20 @@ import java.util.List;
  * Esta classe gerencia operações de banco de dados via API.
  */
 public class DatabaseManager {
+    private static String apiUrl = "http://192.168.0.165:5000/mysql/query"; // URL padrão
     private List<JsonObject> results;
 
     public DatabaseManager() {
         this.results = new ArrayList<>();
     }
 
-    public void execute(String query) {
+    public static void setApiUrl(String url) {
+        apiUrl = url;
+    }
+
+    public void execute(String query, QueryCallback callback) {
         String jsonPayload = "{\"query\": \"" + query + "\"}";
-        new QueryExecutorTask(this).execute(jsonPayload);
+        new QueryExecutorTask(this, callback).execute(jsonPayload);
     }
 
     public List<JsonObject> fetchAll() {
@@ -41,30 +47,44 @@ public class DatabaseManager {
         this.results = results;
     }
 
-    private static class QueryExecutorTask extends AsyncTask<String, Void, List<JsonObject>> {
+    private static class QueryExecutorTask extends AsyncTask<String, Void, Boolean> {
         private DatabaseManager dbManager;
+        private QueryCallback callback;
 
-        QueryExecutorTask(DatabaseManager dbManager) {
+        QueryExecutorTask(DatabaseManager dbManager, QueryCallback callback) {
             this.dbManager = dbManager;
+            this.callback = callback;
         }
 
         @Override
-        protected List<JsonObject> doInBackground(String... params) {
-            JsonObject result = queryExecute(params[0]);
-            return processQueryResult(result);
+        protected Boolean doInBackground(String... params) {
+            try {
+                JsonObject result = queryExecute(params[0]);
+                List<JsonObject> data = processQueryResult(result);
+                dbManager.setResults(data);
+                return true;
+            } catch (Exception e) {
+                Log.e("API_ERROR", "Erro ao executar a consulta: " + e.getMessage());
+                return false;
+            }
         }
 
         @Override
-        protected void onPostExecute(List<JsonObject> result) {
-            dbManager.setResults(result);
+        protected void onPostExecute(Boolean success) {
+            if (success) {
+                Log.d("QUERY_RESULT", "Consulta realizada com sucesso.");
+                callback.onQueryResult(dbManager.fetchAll());
+            } else {
+                Log.e("QUERY_RESULT", "Erro ao executar a consulta.");
+                callback.onInsertResult(false);
+            }
         }
 
-        private static JsonObject queryExecute(String jsonPayload) {
-            String strUrl = "http://192.168.0.165:5000/mysql/query"; // Altere para o seu URL
+        private static JsonObject queryExecute(String jsonPayload) throws IOException {
             HttpURLConnection urlConnection = null;
 
             try {
-                URL url = new URL(strUrl);
+                URL url = new URL(apiUrl);
                 urlConnection = (HttpURLConnection) url.openConnection();
                 urlConnection.setRequestMethod("POST");
                 urlConnection.setRequestProperty("Content-Type", "application/json");
@@ -86,9 +106,6 @@ public class DatabaseManager {
 
                 return JsonParser.parseString(response.toString()).getAsJsonObject();
 
-            } catch (Exception e) {
-                Log.e("API_ERROR", "Erro ao executar a consulta: " + e.getMessage());
-                return null;
             } finally {
                 if (urlConnection != null) {
                     urlConnection.disconnect();
@@ -129,5 +146,10 @@ public class DatabaseManager {
 
             return data;
         }
+    }
+
+    public interface QueryCallback {
+        void onQueryResult(List<JsonObject> result);
+        void onInsertResult(boolean success);
     }
 }

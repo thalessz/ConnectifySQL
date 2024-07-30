@@ -10,7 +10,7 @@ import com.google.gson.JsonObject;
 
 import java.util.List;
 
-public class MainActivity extends AppCompatActivity implements DatabaseListener {
+public class MainActivity extends AppCompatActivity implements DatabaseManager.QueryCallback {
     private TextView txtResult;
     private DatabaseManager dbManager;
 
@@ -22,27 +22,18 @@ public class MainActivity extends AppCompatActivity implements DatabaseListener 
         txtResult = findViewById(R.id.txtResult);
         dbManager = new DatabaseManager();
 
-        // Executar uma consulta SELECT
-        dbManager.execute("SELECT NOME FROM PESSOA");
-
-        // Aguardar um pouco para garantir que a consulta seja realizada
-        new android.os.Handler().postDelayed(() -> {
-            List<JsonObject> results = dbManager.fetchAll();
-            displayResults(results);
-        }, 2000); // Aguarda 2 segundos (ajuste conforme necessário)
+        // Executar uma consulta SELECT automaticamente ao iniciar a atividade
+        executeQuery("SELECT NOME FROM PESSOA");
     }
 
-    private void displayResults(List<JsonObject> results) {
-        StringBuilder output = new StringBuilder();
-        for (JsonObject result : results) {
-            output.append(result.toString()).append("\n"); // Exibe o objeto JSON completo
-        }
-        txtResult.setText(output.toString());
+    private void executeQuery(String query) {
+        dbManager.execute(query, this); // Passa a referência da MainActivity como callback
     }
 
     @Override
     public void onQueryResult(List<JsonObject> result) {
         Log.d("QUERY_RESULT", "Consulta realizada com sucesso.");
+        displayResults(result);
     }
 
     @Override
@@ -52,5 +43,13 @@ public class MainActivity extends AppCompatActivity implements DatabaseListener 
         } else {
             Log.e("INSERT_RESULT", "Erro ao inserir registro.");
         }
+    }
+
+    private void displayResults(List<JsonObject> results) {
+        StringBuilder output = new StringBuilder();
+        for (JsonObject result : results) {
+            output.append(result.toString()).append("\n"); // Exibe o objeto JSON completo
+        }
+        txtResult.setText(output.toString());
     }
 }
