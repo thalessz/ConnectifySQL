@@ -2,6 +2,8 @@ package com.teste.apiconnection;
 
 import android.os.AsyncTask;
 import android.util.Log;
+import android.util.Pair;
+import android.widget.TextView;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -16,6 +18,7 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Classe DatabaseManager
@@ -24,9 +27,11 @@ import java.util.List;
  */
 public class DatabaseManager {
     private static String apiUrl = "http://192.168.0.165:5000/mysql/query"; // URL padrão
-    private List<JsonObject> results;
+    private List<Pair<String, String>> results; // Armazenar pares chave-valor
+    private TextView txtResult; // Referência ao TextView para exibir resultados
 
-    public DatabaseManager() {
+    public DatabaseManager(TextView txtResult) {
+        this.txtResult = txtResult;
         this.results = new ArrayList<>();
     }
 
@@ -34,33 +39,38 @@ public class DatabaseManager {
         apiUrl = url;
     }
 
-    public void execute(String query, QueryCallback callback) {
+    public void execute(String query) {
         String jsonPayload = "{\"query\": \"" + query + "\"}";
-        new QueryExecutorTask(this, callback).execute(jsonPayload);
+        new QueryExecutorTask(this).execute(jsonPayload);
     }
 
-    public List<JsonObject> fetchAll() {
+    public List<Pair<String, String>> fetchAll() {
         return results;
     }
 
-    private void setResults(List<JsonObject> results) {
+    public String getValueAt(int index) {
+        if (index >= 0 && index < results.size()) {
+            return results.get(index).second; // Retorna o valor do par chave-valor
+        }
+        return null; // Retorna null se o índice estiver fora do intervalo
+    }
+
+    private void setResults(List<Pair<String, String>> results) {
         this.results = results;
     }
 
     private static class QueryExecutorTask extends AsyncTask<String, Void, Boolean> {
         private DatabaseManager dbManager;
-        private QueryCallback callback;
 
-        QueryExecutorTask(DatabaseManager dbManager, QueryCallback callback) {
+        QueryExecutorTask(DatabaseManager dbManager) {
             this.dbManager = dbManager;
-            this.callback = callback;
         }
 
         @Override
         protected Boolean doInBackground(String... params) {
             try {
                 JsonObject result = queryExecute(params[0]);
-                List<JsonObject> data = processQueryResult(result);
+                List<Pair<String, String>> data = processQueryResult(result);
                 dbManager.setResults(data);
                 return true;
             } catch (Exception e) {
@@ -73,10 +83,10 @@ public class DatabaseManager {
         protected void onPostExecute(Boolean success) {
             if (success) {
                 Log.d("QUERY_RESULT", "Consulta realizada com sucesso.");
-                callback.onQueryResult(dbManager.fetchAll());
+                // Aqui você pode chamar um método para exibir o resultado
+                dbManager.displayResults(1); // Exibe o segundo valor (índice 1)
             } else {
                 Log.e("QUERY_RESULT", "Erro ao executar a consulta.");
-                callback.onInsertResult(false);
             }
         }
 
@@ -113,8 +123,8 @@ public class DatabaseManager {
             }
         }
 
-        private static List<JsonObject> processQueryResult(JsonObject result) {
-            List<JsonObject> data = new ArrayList<>();
+        private static List<Pair<String, String>> processQueryResult(JsonObject result) {
+            List<Pair<String, String>> data = new ArrayList<>();
 
             if (result != null) {
                 if (result.has("status") && "success".equals(result.get("status").getAsString())) {
@@ -124,32 +134,41 @@ public class DatabaseManager {
                             JsonArray jsonData = dataElement.getAsJsonArray();
                             for (JsonElement element : jsonData) {
                                 if (element.isJsonObject()) {
-                                    data.add(element.getAsJsonObject());
-                                } else {
-                                    Log.w("RESULT_PROCESSING", "Elemento não é um objeto JSON: " + element.toString());
+                                    JsonObject obj = element.getAsJsonObject();
+                                    for (Map.Entry<String, JsonElement> entry : obj.entrySet()) {
+                                        String key = entry.getKey();
+                                        String value = entry.getValue().getAsString();
+                                        data.add(new Pair<>(key, value));
+                                    }
                                 }
                             }
                         } else if (dataElement.isJsonObject()) {
-                            data.add(dataElement.getAsJsonObject());
-                        } else {
-                            Log.w("RESULT_PROCESSING", "O campo 'data' não é um array ou objeto JSON: " + dataElement.toString());
+                            JsonObject obj = dataElement.getAsJsonObject();
+                            for (Map.Entry<String, JsonElement> entry : obj.entrySet()) {
+                                String key = entry.getKey();
+                                String value = entry.getValue().getAsString();
+                                data.add(new Pair<>(key, value));
+                            }
                         }
-                    } else {
-                        Log.e("RESULT_PROCESSING", "Campo 'data' não encontrado no resultado JSON");
                     }
-                } else {
-                    Log.e("RESULT_PROCESSING", "Status não é 'success' no resultado JSON");
                 }
-            } else {
-                Log.e("RESULT_PROCESSING", "Resultado JSON é nulo");
             }
-
             return data;
+        }
+
+        private void displayResults(int index) {
+            String output;
+            if (index >= 0 && index < results.size()) {
+                output = results.get(index).second; // Obtém o valor do índice especificado
+            } else {
+                output = "Valor não encontrado.";
+            }
+            txtResult.setText(output); // Exibe o valor no TextView
         }
     }
 
     public interface QueryCallback {
-        void onQueryResult(List<JsonObject> result);
+        void onQueryResult(List<Pair<String, String>> result); // Retorna uma lista de pares chave-valor
         void onInsertResult(boolean success);
     }
 }
