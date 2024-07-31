@@ -29,6 +29,7 @@ public class DatabaseManager {
     private static String API_URL = "http://192.168.0.165:5000/mysql/query"; // URL padrão da API
     private final List<String> results; // Armazenar valores retornados da consulta
     private final TextView txtResult; // Referência ao TextView para exibir resultados
+    private JsonObject lastResult; // Armazena a última resposta da API
 
     /**
      * Construtor da classe DatabaseManager.
@@ -50,13 +51,30 @@ public class DatabaseManager {
     }
 
     /**
-     * Executa uma consulta SQL.
+     * Executa uma consulta SQL com parâmetros nomeados.
      *
      * @param query A consulta SQL a ser executada.
+     * @param params Um dicionário de parâmetros a serem incluídos na consulta.
      */
-    public void execute(String query) {
-        String jsonPayload = "{\"query\": \"" + query + "\"}";
-        new QueryExecutorTask(this).execute(jsonPayload);
+    public void execute(String query, Map<String, String> params) {
+        // Cria o payload JSON com a consulta
+        JsonObject jsonPayload = new JsonObject();
+        jsonPayload.addProperty("query", query);
+
+        // Adiciona os parâmetros, se houver
+        if (params != null && !params.isEmpty()) {
+            JsonObject paramsJson = new JsonObject();
+            for (Map.Entry<String, String> entry : params.entrySet()) {
+                paramsJson.addProperty(entry.getKey(), entry.getValue()); // Adiciona cada parâmetro
+            }
+            jsonPayload.add("params", paramsJson);
+        }
+
+        // Log do JSON antes de enviar
+        System.out.println(jsonPayload);
+
+        // Executa a tarefa assíncrona com o payload JSON
+        new QueryExecutorTask(this).execute(jsonPayload.toString());
     }
 
     /**
@@ -100,6 +118,24 @@ public class DatabaseManager {
     }
 
     /**
+     * Armazena a última resposta da API.
+     *
+     * @param result O objeto JSON com a resposta da API.
+     */
+    public void setLastResult(JsonObject result) {
+        this.lastResult = result;
+    }
+
+    /**
+     * Retorna a última resposta da API.
+     *
+     * @return O objeto JSON com a última resposta.
+     */
+    public JsonObject getLastResult() {
+        return lastResult;
+    }
+
+    /**
      * Classe interna QueryExecutorTask.
      *
      * Esta classe é responsável por executar a consulta em segundo plano.
@@ -120,6 +156,7 @@ public class DatabaseManager {
         protected Boolean doInBackground(String... params) {
             try {
                 JsonObject result = queryExecute(params[0]); // Executa a consulta
+                dbManager.setLastResult(result); // Armazena a última resposta
                 processQueryResult(result, dbManager); // Processa os resultados
                 return true;
             } catch (Exception e) {
@@ -139,6 +176,13 @@ public class DatabaseManager {
                 }
             } else {
                 Log.e("QUERY_RESULT", "Erro ao executar a consulta.");
+                // Log para ver a resposta da API
+                JsonObject result = dbManager.getLastResult();
+                if (result != null) {
+                    Log.e("API_RESPONSE", "Erro na resposta da API: " + result.toString());
+                } else {
+                    Log.e("API_RESPONSE", "Resposta da API é nula.");
+                }
             }
         }
 
@@ -195,23 +239,14 @@ public class DatabaseManager {
                 Log.d("API_RESULT", result.toString()); // Log da resposta da API
                 if (result.has("status") && "success".equals(result.get("status").getAsString())) {
                     if (result.has("data")) {
-                        JsonElement dataElement = result.get("data");
-                        if (dataElement.isJsonArray()) {
-                            JsonArray jsonData = dataElement.getAsJsonArray();
-                            for (JsonElement element : jsonData) {
-                                if (element.isJsonObject()) {
-                                    JsonObject obj = element.getAsJsonObject();
-                                    for (Map.Entry<String, JsonElement> entry : obj.entrySet()) {
-                                        String value = entry.getValue().getAsString();
-                                        dbManager.addResult(value); // Adiciona o valor à lista
-                                    }
+                        JsonArray jsonData = result.getAsJsonArray("data");
+                        for (JsonElement element : jsonData) {
+                            if (element.isJsonObject()) {
+                                JsonObject obj = element.getAsJsonObject();
+                                for (Map.Entry<String, JsonElement> entry : obj.entrySet()) {
+                                    String value = entry.getValue().getAsString();
+                                    dbManager.addResult(value); // Adiciona o valor à lista
                                 }
-                            }
-                        } else if (dataElement.isJsonObject()) {
-                            JsonObject obj = dataElement.getAsJsonObject();
-                            for (Map.Entry<String, JsonElement> entry : obj.entrySet()) {
-                                String value = entry.getValue().getAsString();
-                                dbManager.addResult(value); // Adiciona o valor à lista
                             }
                         }
                     }

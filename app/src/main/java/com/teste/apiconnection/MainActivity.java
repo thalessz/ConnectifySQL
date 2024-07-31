@@ -1,35 +1,40 @@
 package com.teste.apiconnection;
-
 import android.os.Bundle;
 import android.widget.TextView;
 
 import androidx.appcompat.app.AppCompatActivity;
 
-/**
- * MainActivity é a atividade principal do aplicativo.
- * Ela inicializa a interface do usuário e executa consultas ao banco de dados.
- */
-public class MainActivity extends AppCompatActivity {
-    private TextView txtResult; // TextView para exibir os resultados da consulta
-    private DatabaseManager dbManager; // Gerenciador de banco de dados
+import java.util.HashMap;
+import java.util.Map;
 
-    @Override
-    protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_main);
+    public class MainActivity extends AppCompatActivity {
+        private TextView txtResult;
+        private DatabaseManager dbManager;
 
-        // Inicializa o TextView e o DatabaseManager
-        txtResult = findViewById(R.id.txtResult);
-        dbManager = new DatabaseManager(txtResult);
+        @Override
+        protected void onCreate(Bundle savedInstanceState) {
+            super.onCreate(savedInstanceState);
+            setContentView(R.layout.activity_main);
 
-        // Executa uma consulta SELECT automaticamente ao iniciar a atividade
-        dbManager.execute("SELECT NOME FROM PESSOA");
+            txtResult = findViewById(R.id.txtResult);
+            dbManager = new DatabaseManager(txtResult);
+
+            // Exemplo de consulta com múltiplos parâmetros
+            Map<String, String> params = new HashMap<>();
+            params.put("param1", "5"); // Valor para ID
+
+            // A consulta deve usar '?' como placeholders
+            dbManager.execute("SELECT NOME FROM PESSOA WHERE ID = %s", params);
+        }
+
+        /**
+         * Exibe os resultados da consulta no TextView.
+         */
+        public void displayResults() {
+            StringBuilder output = new StringBuilder();
+            for (int i = 0; i < dbManager.getResultCount(); i++) {
+                output.append(dbManager.getValueAt(i)).append("\n"); // Adiciona todos os valores
+            }
+            txtResult.setText(output.toString()); // Exibe todos os valores no TextView
+        }
     }
-
-    /**
-     * Exibe os resultados da consulta no TextView.
-     */
-    public void displayResults() {
-        txtResult.setText(dbManager.getValueAt(2).toString()); // Exibe todos os valores no TextView
-    }
-}
