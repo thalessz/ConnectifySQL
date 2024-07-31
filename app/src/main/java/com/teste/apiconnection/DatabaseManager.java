@@ -27,7 +27,7 @@ import java.util.Map;
  */
 public class DatabaseManager {
     private static String API_URL = "http://192.168.0.165:5000/mysql/query"; // URL padrão da API
-    private final List<String> results; // Armazenar valores retornados da consulta
+    private final List<List<String>> results; // Armazenar resultados em forma de matriz
     private final TextView txtResult; // Referência ao TextView para exibir resultados
     private JsonObject lastResult; // Armazena a última resposta da API
 
@@ -38,7 +38,7 @@ public class DatabaseManager {
      */
     public DatabaseManager(TextView txtResult) {
         this.txtResult = txtResult;
-        this.results = new ArrayList<>();
+        this.results = new ArrayList<>(); // Inicializa a matriz de resultados
     }
 
     /**
@@ -51,7 +51,7 @@ public class DatabaseManager {
     }
 
     /**
-     * Executa uma consulta SQL com parâmetros nomeados.
+     * Executa uma consulta SQL com parâmetros.
      *
      * @param query A consulta SQL a ser executada.
      * @param params Um dicionário de parâmetros a serem incluídos na consulta.
@@ -71,7 +71,7 @@ public class DatabaseManager {
         }
 
         // Log do JSON antes de enviar
-        System.out.println(jsonPayload);
+        Log.d("API_PAYLOAD", jsonPayload.toString());
 
         // Executa a tarefa assíncrona com o payload JSON
         new QueryExecutorTask(this).execute(jsonPayload.toString());
@@ -87,14 +87,15 @@ public class DatabaseManager {
     }
 
     /**
-     * Retorna o valor no índice especificado.
+     * Retorna o valor no índice especificado (linha, coluna).
      *
-     * @param index O índice do valor a ser retornado.
+     * @param row O índice da linha.
+     * @param col O índice da coluna.
      * @return O valor no índice especificado.
      */
-    public String getValueAt(int index) {
-        if (index >= 0 && index < results.size()) {
-            return results.get(index);
+    public String getValueAt(int row, int col) {
+        if (row >= 0 && row < results.size() && col >= 0 && col < results.get(row).size()) {
+            return results.get(row).get(col);
         }
         return null;
     }
@@ -102,19 +103,31 @@ public class DatabaseManager {
     /**
      * Retorna todos os valores armazenados.
      *
-     * @return Uma lista de valores retornados pela consulta.
+     * @return Uma lista de listas com os valores retornados pela consulta.
      */
-    public List<String> fetchAllValues() {
-        return new ArrayList<>(results); // Retorna uma cópia da lista de resultados
+    public List<List<String>> fetchAll() {
+        return new ArrayList<>(results); // Retorna uma cópia da matriz de resultados
     }
 
     /**
-     * Adiciona um resultado à lista de resultados.
+     * Armazena os resultados da consulta.
      *
-     * @param value O valor a ser adicionado.
+     * @param result O objeto JSON com o resultado da consulta.
      */
-    private void addResult(String value) {
-        results.add(value);
+    public void processQueryResult(JsonObject result) {
+        if (result != null && result.has("data")) {
+            JsonArray jsonData = result.getAsJsonArray("data");
+            for (JsonElement element : jsonData) {
+                if (element.isJsonObject()) {
+                    JsonObject row = element.getAsJsonObject();
+                    List<String> rowData = new ArrayList<>();
+                    for (Map.Entry<String, JsonElement> entry : row.entrySet()) {
+                        rowData.add(entry.getValue().getAsString()); // Adiciona cada valor da linha
+                    }
+                    results.add(rowData); // Adiciona a linha à matriz de resultados
+                }
+            }
+        }
     }
 
     /**
@@ -124,6 +137,7 @@ public class DatabaseManager {
      */
     public void setLastResult(JsonObject result) {
         this.lastResult = result;
+        processQueryResult(result); // Processa os resultados ao armazenar a última resposta
     }
 
     /**
@@ -157,7 +171,6 @@ public class DatabaseManager {
             try {
                 JsonObject result = queryExecute(params[0]); // Executa a consulta
                 dbManager.setLastResult(result); // Armazena a última resposta
-                processQueryResult(result, dbManager); // Processa os resultados
                 return true;
             } catch (Exception e) {
                 Log.e("API_ERROR", "Erro ao executar a consulta: " + e.getMessage());
@@ -227,32 +240,6 @@ public class DatabaseManager {
                 }
             }
         }
-
-        /**
-         * Processa o resultado da consulta e armazena os valores.
-         *
-         * @param result O objeto JSON com o resultado da consulta.
-         * @param dbManager O gerenciador de banco de dados.
-         */
-        private static void processQueryResult(JsonObject result, DatabaseManager dbManager) {
-            if (result != null) {
-                Log.d("API_RESULT", result.toString()); // Log da resposta da API
-                if (result.has("status") && "success".equals(result.get("status").getAsString())) {
-                    if (result.has("data")) {
-                        JsonArray jsonData = result.getAsJsonArray("data");
-                        for (JsonElement element : jsonData) {
-                            if (element.isJsonObject()) {
-                                JsonObject obj = element.getAsJsonObject();
-                                for (Map.Entry<String, JsonElement> entry : obj.entrySet()) {
-                                    String value = entry.getValue().getAsString();
-                                    dbManager.addResult(value); // Adiciona o valor à lista
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
     }
 
     /**
@@ -261,7 +248,7 @@ public class DatabaseManager {
      * Esta interface é usada para retornar os resultados da consulta e inserção.
      */
     public interface QueryCallback {
-        void onQueryResult(List<String> result); // Retorna uma lista de valores
+        void onQueryResult(List<List<String>> result); // Retorna uma lista de listas de valores
         void onInsertResult(boolean success); // Indica se a inserção foi bem-sucedida
     }
 }
