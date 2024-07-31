@@ -2,7 +2,6 @@ package com.teste.apiconnection;
 
 import android.os.AsyncTask;
 import android.util.Log;
-import android.util.Pair;
 import android.widget.TextView;
 
 import com.google.gson.JsonArray;
@@ -24,37 +23,95 @@ import java.util.Map;
  * Classe DatabaseManager
  *
  * Esta classe gerencia operações de banco de dados via API.
+ * Ela executa consultas SQL e processa os resultados.
  */
 public class DatabaseManager {
-    private static  String API_URL = "http://192.168.0.165:5000/mysql/query"; // URL padrão
-    private final List<String> results; // Armazenar valores
+    private static String API_URL = "http://192.168.0.165:5000/mysql/query"; // URL padrão da API
+    private final List<String> results; // Armazenar valores retornados da consulta
     private final TextView txtResult; // Referência ao TextView para exibir resultados
 
+    /**
+     * Construtor da classe DatabaseManager.
+     *
+     * @param txtResult O TextView onde os resultados serão exibidos.
+     */
     public DatabaseManager(TextView txtResult) {
         this.txtResult = txtResult;
         this.results = new ArrayList<>();
     }
 
+    /**
+     * Define a URL da API.
+     *
+     * @param url A nova URL da API.
+     */
     public static void setApiUrl(String url) {
-        DatabaseManager.API_URL = url;
+        API_URL = url;
     }
 
+    /**
+     * Executa uma consulta SQL.
+     *
+     * @param query A consulta SQL a ser executada.
+     */
     public void execute(String query) {
         String jsonPayload = "{\"query\": \"" + query + "\"}";
         new QueryExecutorTask(this).execute(jsonPayload);
     }
 
-    public List<String> fetchAllValues() {
-        return results;
+    /**
+     * Retorna o número de resultados.
+     *
+     * @return O número de resultados.
+     */
+    public int getResultCount() {
+        return results.size();
     }
 
+    /**
+     * Retorna o valor no índice especificado.
+     *
+     * @param index O índice do valor a ser retornado.
+     * @return O valor no índice especificado.
+     */
+    public String getValueAt(int index) {
+        if (index >= 0 && index < results.size()) {
+            return results.get(index);
+        }
+        return null;
+    }
+
+    /**
+     * Retorna todos os valores armazenados.
+     *
+     * @return Uma lista de valores retornados pela consulta.
+     */
+    public List<String> fetchAllValues() {
+        return new ArrayList<>(results); // Retorna uma cópia da lista de resultados
+    }
+
+    /**
+     * Adiciona um resultado à lista de resultados.
+     *
+     * @param value O valor a ser adicionado.
+     */
     private void addResult(String value) {
         results.add(value);
     }
 
+    /**
+     * Classe interna QueryExecutorTask.
+     *
+     * Esta classe é responsável por executar a consulta em segundo plano.
+     */
     private static class QueryExecutorTask extends AsyncTask<String, Void, Boolean> {
-        private final DatabaseManager dbManager;
+        private final DatabaseManager dbManager; // Referência ao DatabaseManager
 
+        /**
+         * Construtor da classe QueryExecutorTask.
+         *
+         * @param dbManager O gerenciador de banco de dados.
+         */
         QueryExecutorTask(DatabaseManager dbManager) {
             this.dbManager = dbManager;
         }
@@ -62,8 +119,8 @@ public class DatabaseManager {
         @Override
         protected Boolean doInBackground(String... params) {
             try {
-                JsonObject result = queryExecute(params[0]);
-                processQueryResult(result, dbManager);
+                JsonObject result = queryExecute(params[0]); // Executa a consulta
+                processQueryResult(result, dbManager); // Processa os resultados
                 return true;
             } catch (Exception e) {
                 Log.e("API_ERROR", "Erro ao executar a consulta: " + e.getMessage());
@@ -85,6 +142,13 @@ public class DatabaseManager {
             }
         }
 
+        /**
+         * Executa a consulta na API e retorna o resultado.
+         *
+         * @param jsonPayload O payload JSON da consulta.
+         * @return O objeto JSON com o resultado da consulta.
+         * @throws IOException Se ocorrer um erro de entrada/saída.
+         */
         private static JsonObject queryExecute(String jsonPayload) throws IOException {
             HttpURLConnection urlConnection = null;
 
@@ -95,11 +159,13 @@ public class DatabaseManager {
                 urlConnection.setRequestProperty("Content-Type", "application/json");
                 urlConnection.setDoOutput(true);
 
+                // Envia o payload JSON
                 try (OutputStream os = urlConnection.getOutputStream()) {
                     byte[] input = jsonPayload.getBytes("utf-8");
                     os.write(input, 0, input.length);
                 }
 
+                // Lê a resposta da API
                 BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(urlConnection.getInputStream()));
                 StringBuilder response = new StringBuilder();
                 String responseLine;
@@ -118,6 +184,12 @@ public class DatabaseManager {
             }
         }
 
+        /**
+         * Processa o resultado da consulta e armazena os valores.
+         *
+         * @param result O objeto JSON com o resultado da consulta.
+         * @param dbManager O gerenciador de banco de dados.
+         */
         private static void processQueryResult(JsonObject result, DatabaseManager dbManager) {
             if (result != null) {
                 Log.d("API_RESULT", result.toString()); // Log da resposta da API
@@ -131,7 +203,7 @@ public class DatabaseManager {
                                     JsonObject obj = element.getAsJsonObject();
                                     for (Map.Entry<String, JsonElement> entry : obj.entrySet()) {
                                         String value = entry.getValue().getAsString();
-                                        dbManager.addResult(value);
+                                        dbManager.addResult(value); // Adiciona o valor à lista
                                     }
                                 }
                             }
@@ -139,7 +211,7 @@ public class DatabaseManager {
                             JsonObject obj = dataElement.getAsJsonObject();
                             for (Map.Entry<String, JsonElement> entry : obj.entrySet()) {
                                 String value = entry.getValue().getAsString();
-                                dbManager.addResult(value);
+                                dbManager.addResult(value); // Adiciona o valor à lista
                             }
                         }
                     }
@@ -148,8 +220,13 @@ public class DatabaseManager {
         }
     }
 
+    /**
+     * Interface QueryCallback.
+     *
+     * Esta interface é usada para retornar os resultados da consulta e inserção.
+     */
     public interface QueryCallback {
         void onQueryResult(List<String> result); // Retorna uma lista de valores
-        void onInsertResult(boolean success);
+        void onInsertResult(boolean success); // Indica se a inserção foi bem-sucedida
     }
 }

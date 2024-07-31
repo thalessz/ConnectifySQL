@@ -30,10 +30,6 @@ public class MainActivity extends AppCompatActivity {
      * Exibe os resultados da consulta no TextView.
      */
     public void displayResults() {
-        StringBuilder output = new StringBuilder();
-        for (String value : dbManager.fetchAllValues()) {
-            output.append(value).append("\n"); // Adiciona todos os valores
-        }
-        txtResult.setText(output.toString()); // Exibe todos os valores no TextView
+        txtResult.setText(dbManager.getValueAt(2).toString()); // Exibe todos os valores no TextView
     }
 }
