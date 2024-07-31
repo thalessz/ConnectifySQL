@@ -1,4 +1,4 @@
-# API Connection Android App
+# ConnectifySQL
 
 Este repositório contém uma aplicação Android para gerenciar operações de banco de dados via API. A aplicação realiza consultas SQL e exibe os resultados em uma interface gráfica.
 
